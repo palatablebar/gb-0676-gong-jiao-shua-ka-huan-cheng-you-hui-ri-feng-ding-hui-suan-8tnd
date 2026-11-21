@@ -1,1 +1,49 @@
-{% extends 'base.html' %}{% block workspace %}<div class="grid"><section class="panel"><div class="panel__head"><h2>行程双账</h2><span class="tag">{{rows|length}} 行</span></div><div class="panel__body"><input class="records-search" id="filter" placeholder="筛选卡号、线路或批次" aria-label="筛选记录"></div><div class="table-scroll"><table><thead><tr><th>来源行</th>{% for c in columns %}<th>{{labels.get(c,c)}}</th>{% endfor %}</tr></thead><tbody id="records">{% for row in rows %}<tr class="{{'difference' if row.get('status')=='差异' else ''}}"><td>{{row.get('_sources',[])|join(',')}}</td>{% for c in columns %}<td title="{{row.get(c,'')}}">{{row.get(c,'—')}}</td>{% endfor %}</tr>{% else %}<tr><td class="empty">选择样例后运行。</td></tr>{% endfor %}</tbody></table></div></section><div class="stack"><section class="panel"><div class="panel__head"><h2>扣费核对</h2><span>元</span></div><div class="panel__body"><div class="balance"><div>复算应扣<b>{{run.stages[5].metrics.expected_total}}</b></div><div>系统实扣<b>{{run.stages[5].metrics.reported_total}}</b></div></div><div class="bar"></div></div></section><section class="panel"><div class="panel__head"><h2>隔离原因</h2><span class="bad">{{stage.cumulative_quarantine|length}}</span></div><div class="table-scroll"><table><thead><tr><th>行</th><th>原因</th><th>依据</th></tr></thead><tbody>{% for q in stage.cumulative_quarantine %}<tr><td>{{q.get('_line','—')}}</td><td>{{q.reason}}</td><td title="{{q.detail}}">{{q.detail}}</td></tr>{% else %}<tr><td colspan="3" class="empty">暂无隔离记录。</td></tr>{% endfor %}</tbody></table></div></section><section class="panel"><div class="panel__head"><h2>阶段核验</h2><span>{{index+1}} / 7</span></div><div class="panel__body">{% for key,value in stage.metrics.items() %}<div class="balance"><span>{{labels.get(key,key)}}</span><span class="meta">{{value}}</span></div>{% endfor %}</div></section></div></div>{% endblock %}
+{% extends 'base.html' %}{% block workspace %}
+<div class="grid">
+  <section class="panel">
+    <div class="panel__head"><h2>换乘裁决 · 沿枢纽逐程复核</h2><span class="tag">站点资料 {{profile.version}}</span></div>
+    <div class="panel__body"><input class="records-search" id="filter" placeholder="筛选卡号、线路或站点" aria-label="筛选记录"></div>
+    <div class="table-scroll"><table><thead><tr><th>来源行</th>{% for c in columns %}<th>{{labels.get(c,c)}}</th>{% endfor %}</tr></thead>
+      <tbody id="records">{% for row in rows %}<tr class="{{'difference' if row.get('basis_status')=='待核' else ''}}"><td>{{row.get('_sources',[])|join(',')}}</td>{% for c in columns %}<td title="{{row.get(c,'')}}">{{row.get(c,'—')}}</td>{% endfor %}</tr>{% else %}<tr><td class="empty">选择样例后运行。</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  <div class="stack">
+    <section class="panel">
+      <div class="panel__head"><h2>当日唯一应收</h2><span>元 · {{daily|length}} 个卡日</span></div>
+      <div class="table-scroll"><table><thead><tr><th>卡日键</th><th>当日应收</th><th>日累计</th><th>封顶额度</th></tr></thead>
+        <tbody>{% for d in daily %}<tr><td>{{d.receivable_key}}</td><td>{{d.day_receivable}}</td><td>{{d.day_paid}}</td><td>{{d.day_cap}}</td></tr>{% else %}<tr><td colspan="4" class="empty">暂无应收。</td></tr>{% endfor %}</tbody></table></div>
+      <div class="panel__body"><div class="balance"><div>应收合计<b>{{stage.metrics.receivable_total}}</b></div><div>卡日数<b>{{stage.metrics.receivables}}</b></div></div></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><h2>额度占用 · 重跑不重复</h2><span>{{occupied|length}} 条台账</span></div>
+      <div class="table-scroll"><table><thead><tr><th>卡日键</th><th>金额</th><th>批次</th></tr></thead>
+        <tbody>{% for o in occupied %}<tr><td>{{o.receivable_key}}</td><td>{{o.amount}}</td><td>{{o.runs}}</td></tr>{% else %}<tr><td colspan="3" class="empty">尚未占用额度。</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><h2>站点资料切换</h2><span>{{profile.version}}</span></div>
+      <div class="panel__body">
+        <form id="profile-form" class="toolbar">
+          <label>版本<input name="version" value="{{profile.version}}" required></label>
+          <label>普通站 / 分<input name="normal" type="number" min="1" value="{{profile.limits.normal}}" required></label>
+          <label>枢纽站 / 分<input name="hub" type="number" min="1" value="{{profile.limits.hub}}" required></label>
+          <button class="primary" type="submit">校验并切换</button>
+          <span id="profile-feedback" role="status"></span>
+        </form>
+        <div class="table-scroll"><table><thead><tr><th>线路</th><th>站点</th><th>类型</th><th>核验</th></tr></thead>
+          <tbody>{% for route,entry in profile.stations.items() %}<tr><td>{{route}}</td><td>{{entry.station}}</td><td>{{station_types.get(entry.type,entry.type)}}</td><td>{{'已核' if entry.verified else '待核'}}</td></tr>{% endfor %}</tbody></table></div>
+        <script>window.stationCatalog={{profile.stations|tojson}};</script>
+        <div class="table-scroll"><table><thead><tr><th>版本</th><th>摘要</th><th>生效</th></tr></thead>
+          <tbody>{% for p in profile_history %}<tr><td>{{p.version}}</td><td title="{{p.digest}}">{{p.digest[:12]}}</td><td>{{'生效' if p.active else '历史'}}</td></tr>{% else %}<tr><td colspan="3" class="empty">使用仓内默认资料。</td></tr>{% endfor %}</tbody></table></div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><h2>封存前置</h2><span class="{{'bad' if pending|length else ''}}">{{'不可封存' if pending|length else '依据已核清'}}</span></div>
+      <div class="panel__body">
+        <div class="balance"><div>待核换乘<b>{{pending|length}}</b></div><div>可归档<b>{{run.stages[6].metrics.ready}}</b></div></div>
+        {% if pending %}<p class="bad">有 {{pending|length}} 笔换乘的站点依据未核清，核清前不能封存。</p>{% endif %}
+        <button id="seal" data-pending="{{pending|length}}" {% if pending|length %}disabled{% endif %}>复核封存</button>
+        <span id="seal-feedback" role="status"></span>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,1 +1,28 @@
-{% extends 'base.html' %}{% block workspace %}<div class="grid"><section class="panel"><div class="panel__head"><h2>行程双账</h2><span class="tag">{{rows|length}} 行</span></div><div class="panel__body"><input class="records-search" id="filter" placeholder="筛选卡号、线路或批次" aria-label="筛选记录"></div><div class="table-scroll"><table><thead><tr><th>来源行</th>{% for c in columns %}<th>{{labels.get(c,c)}}</th>{% endfor %}</tr></thead><tbody id="records">{% for row in rows %}<tr class="{{'difference' if row.get('status')=='差异' else ''}}"><td>{{row.get('_sources',[])|join(',')}}</td>{% for c in columns %}<td title="{{row.get(c,'')}}">{{row.get(c,'—')}}</td>{% endfor %}</tr>{% else %}<tr><td class="empty">选择样例后运行。</td></tr>{% endfor %}</tbody></table></div></section><div class="stack"><section class="panel"><div class="panel__head"><h2>扣费核对</h2><span>元</span></div><div class="panel__body"><div class="balance"><div>复算应扣<b>{{run.stages[5].metrics.expected_total}}</b></div><div>系统实扣<b>{{run.stages[5].metrics.reported_total}}</b></div></div><div class="bar"></div></div></section><section class="panel"><div class="panel__head"><h2>隔离原因</h2><span class="bad">{{stage.cumulative_quarantine|length}}</span></div><div class="table-scroll"><table><thead><tr><th>行</th><th>原因</th><th>依据</th></tr></thead><tbody>{% for q in stage.cumulative_quarantine %}<tr><td>{{q.get('_line','—')}}</td><td>{{q.reason}}</td><td title="{{q.detail}}">{{q.detail}}</td></tr>{% else %}<tr><td colspan="3" class="empty">暂无隔离记录。</td></tr>{% endfor %}</tbody></table></div></section><section class="panel"><div class="panel__head"><h2>阶段核验</h2><span>{{index+1}} / 7</span></div><div class="panel__body">{% for key,value in stage.metrics.items() %}<div class="balance"><span>{{labels.get(key,key)}}</span><span class="meta">{{value}}</span></div>{% endfor %}</div></section></div></div>{% endblock %}
+{% extends 'base.html' %}{% block workspace %}
+<div class="grid">
+  <section class="panel">
+    <div class="panel__head"><h2>日结归档 · 封存前核对</h2><span class="tag">{{rows|length}} 行</span></div>
+    <div class="panel__body"><input class="records-search" id="filter" placeholder="筛选卡号、卡日键或结论" aria-label="筛选记录"></div>
+    <div class="table-scroll"><table><thead><tr><th>来源行</th>{% for c in columns %}<th>{{labels.get(c,c)}}</th>{% endfor %}</tr></thead>
+      <tbody id="records">{% for row in rows %}<tr class="{{'difference' if row.get('status')=='差异' else ''}}"><td>{{row.get('_sources',[])|join(',')}}</td>{% for c in columns %}<td title="{{row.get(c,'')}}">{{row.get(c,'—')}}</td>{% endfor %}</tr>{% else %}<tr><td class="empty">选择样例后运行。</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  <div class="stack">
+    <section class="panel">
+      <div class="panel__head"><h2>封存前置</h2><span class="{{'bad' if pending|length else ''}}">{{'不可封存' if pending|length else '可封存'}}</span></div>
+      <div class="panel__body">
+        <div class="balance"><div>待核换乘<b>{{pending|length}}</b></div><div>应收卡日<b>{{stage.metrics.receivables}}</b></div></div>
+        <div class="balance"><div>版本<b>V{{run.version}}</b></div><div>状态<b>{{run.decision}}</b></div></div>
+        {% if pending %}<p class="bad">有 {{pending|length}} 笔换乘的站点依据未核清，核清前不能封存。</p>{% endif %}
+        <div class="review"><button id="seal" data-pending="{{pending|length}}" {% if pending|length %}disabled{% endif %}>复核封存</button><span id="seal-feedback" role="status"></span></div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel__head"><h2>卡日应收</h2><span>元</span></div>
+      <div class="table-scroll"><table><thead><tr><th>卡日键</th><th>当日应收</th></tr></thead>
+        <tbody>{% for r in receivables %}<tr><td>{{r.receivable_key}}</td><td>{{r.amount}}</td></tr>{% else %}<tr><td colspan="2" class="empty">暂无应收。</td></tr>{% endfor %}</tbody></table></div>
+      <div class="panel__body"><div class="balance"><div>应收合计<b>{{stage.metrics.receivable_total}}</b></div><div>摘要<b title="{{stage.metrics.sha256}}">{{stage.metrics.sha256[:12]}}</b></div></div></div>
+    </section>
+    <section class="panel"><div class="panel__head"><h2>阶段核验</h2><span>{{index+1}} / 7</span></div><div class="panel__body">{% for key,value in stage.metrics.items() %}<div class="balance"><span>{{labels.get(key,key)}}</span><span class="meta">{{value}}</span></div>{% endfor %}</div></section>
+  </div>
+</div>
+{% endblock %}

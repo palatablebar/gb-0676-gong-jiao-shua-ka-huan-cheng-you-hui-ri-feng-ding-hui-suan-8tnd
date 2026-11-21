@@ -45,6 +45,17 @@ def create_app():
         from app.archive import build_archive
         run=store.get(run_id)
         return application.response_class(build_archive(run),mimetype="text/csv",headers={"Content-Disposition":'attachment; filename="evidence.csv"'})
+    @application.get("/api/stations")
+    def station_profile():
+        from app.modules.m2_routes import stations
+        return {"active":store.active_profile(),"history":store.profile_history(),"limits":stations.DEFAULT_PROFILE["limits"],"types":stations.TYPE_LABELS}
+    @application.post("/api/stations")
+    def switch_station_profile():
+        payload=request.get_json(silent=True)
+        if not isinstance(payload,dict): raise DomainError("BAD_BODY","请求需要对象")
+        return store.switch_profile(payload)
+    @application.get("/api/receivables")
+    def receivables(): return {"occupied":store.occupied_quota()}
     for index,(slug,title) in enumerate(MODULES,1):
         module=importlib.import_module(f"app.modules.m{index}_{slug}.handler")
         application.register_blueprint(module.bp)

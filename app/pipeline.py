@@ -6,6 +6,7 @@ from app.manifest import digest,manifest
 from app import store
 from app.modules.m1_taps.rules import evaluate as stage1
 from app.modules.m2_routes.rules import evaluate as stage2
+from app.modules.m2_routes import stations
 from app.modules.m3_fares.rules import evaluate as stage3
 from app.modules.m4_journeys.rules import evaluate as stage4
 from app.modules.m5_discounts.rules import evaluate as stage5
@@ -13,10 +14,11 @@ from app.modules.m6_clearing.rules import evaluate as stage6
 from app.modules.m7_settlement.rules import evaluate as stage7
 STAGES=[stage1,stage2,stage3,stage4,stage5,stage6,stage7]
 def load_sample(name):
-    if name not in {"dirty.csv","clean.csv","legacy.csv"}: raise DomainError("BAD_SAMPLE","样例不存在",404)
+    if name not in {"dirty.csv","clean.csv","legacy.csv","hub.csv"}: raise DomainError("BAD_SAMPLE","样例不存在",404)
     return (ROOT/"sample_data"/name).read_bytes()
 def calculate(raw,params=None,stop=6):
-    params=params or {};started=time.monotonic();context={"parameters":params,"raw":raw,"quarantine":[]};stages=[];rows=[]
+    params=dict(params or {});params.setdefault("station_profile",stations.DEFAULT_PROFILE)
+    started=time.monotonic();context={"parameters":params,"raw":raw,"quarantine":[]};stages=[];rows=[]
     for index,stage in enumerate(STAGES[:stop+1]):
         result=stage(raw if index==0 else rows,context)
         result=scalar(result);rows=result["rows"]
@@ -27,6 +29,8 @@ def calculate(raw,params=None,stop=6):
         stages.append(result)
     return {"run_id":digest(raw,params)[:20],"stages":stages,"manifest":manifest(raw,params,started),"parameters":params}
 def execute(raw,params=None):
+    params=dict(params or {})
+    if "station_profile" not in params: params["station_profile"]=store.active_profile()
     result=calculate(raw,params);return store.save(result["run_id"],result)
 def stage_preview(index,payload):
     if "rows" in payload and index>0:
@@ -35,4 +39,6 @@ def stage_preview(index,payload):
         return scalar(STAGES[index](payload["rows"],payload.get("context",{"parameters":{},"quarantine":[]})))
     raw=payload.get("csv")
     raw=raw.encode() if isinstance(raw,str) else load_sample(payload.get("sample","dirty.csv"))
-    return calculate(raw,payload.get("parameters",{}),index)["stages"][-1]
+    params=dict(payload.get("parameters",{}))
+    if index>0: params.setdefault("station_profile",stations.DEFAULT_PROFILE)
+    return calculate(raw,params,index)["stages"][-1]
